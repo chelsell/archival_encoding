@@ -37,6 +37,10 @@ def ffmpeg_cmd(args: list[str]):
 def ffprobe_cmd(args: list[str]):
     return FFMPEG_PREFIX + [FFPROBE_BIN] + args
 
+def ffmpeg_run(args: list[str], **kwargs):
+    """Run ffmpeg with the configured prefix/binary."""
+    subprocess.run(ffmpeg_cmd(args), check=True, **kwargs)
+
 def run(cmd: list[str]):
     p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if p.returncode != 0:
@@ -214,12 +218,12 @@ def psnr_windows(ref: Path, tst: Path, roi=None, stride: int = 1, threads: int =
             psnr_in = "[0:v][1:v]"
         filters.append(f"{psnr_in}psnr=stats_file={tmp_path}")
         fc = ";".join(filters)
-        cmd = ffmpeg_cmd(["-hide_banner","-loglevel","error",
-                          "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(ref),
-                          "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(tst),
-                          "-filter_complex", fc,
-                          "-an","-f","null","-"])
-        subprocess.run(cmd, check=True)
+        cmd = ["-hide_banner","-loglevel","error",
+               "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(ref),
+               "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(tst),
+               "-filter_complex", fc,
+               "-an","-fflags","+genpts","-f","null","-"]
+        ffmpeg_run(cmd)
         stat, frames = _avg_stat_from_file(tmp_path, ["mse_avg"])
         try: tmp_path.unlink()
         except Exception: pass
@@ -258,12 +262,12 @@ def ssim_windows(ref: Path, tst: Path, roi=None, stride: int = 1, threads: int =
             ssim_in = "[0:v][1:v]"
         filters.append(f"{ssim_in}ssim=stats_file={tmp_path}")
         fc = ";".join(filters)
-        cmd = ffmpeg_cmd(["-hide_banner","-loglevel","error",
-                          "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(ref),
-                          "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(tst),
-                          "-filter_complex", fc,
-                          "-an","-f","null","-"])
-        subprocess.run(cmd, check=True)
+        cmd = ["-hide_banner","-loglevel","error",
+               "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(ref),
+               "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(tst),
+               "-filter_complex", fc,
+               "-an","-fflags","+genpts","-f","null","-"]
+        ffmpeg_run(cmd)
         stat, frames = _avg_stat_from_file(tmp_path, ["All"])
         try: tmp_path.unlink()
         except Exception: pass
@@ -300,13 +304,13 @@ def vmaf_windows(ref: Path, tst: Path, roi=None, stride: int = 1, threads: int =
         model = f":model_path={model_path}" if model_path else ""
         filters.append(f"{in_a}{in_b}libvmaf=log_fmt=json:log_path={tmp_path}{model}")
         fc = ";".join(filters)
-        cmd = ffmpeg_cmd(["-hide_banner","-loglevel","error",
-                          "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(ref),
-                          "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(tst),
-                          "-filter_complex", fc,
-                          "-an","-f","null","-"])
+        cmd = ["-hide_banner","-loglevel","error",
+               "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(ref),
+               "-ss", f"{start}"] + (["-t", f"{dur}"] if dur else []) + ["-i", str(tst),
+               "-filter_complex", fc,
+               "-an","-fflags","+genpts","-f","null","-"]
         try:
-            subprocess.run(cmd, check=True)
+            ffmpeg_run(cmd)
         except subprocess.CalledProcessError:
             # If VMAF fails (e.g., missing model), skip gracefully
             try: Path(tmp_path).unlink()
